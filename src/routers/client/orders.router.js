@@ -4,13 +4,13 @@ const pool = require("../../../db");
 const router = express.Router();
 
 // Get all orders
-router.get('/', async (req, res) => {
-	try {
-		const result = await pool.query('SELECT * FROM "orders"');
-		res.json(result.rows);
-	} catch (err) {
-		res.status(500).json({ error: err.message });
-	}
+router.get("/", async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM "orders"');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Create a new order
@@ -31,11 +31,11 @@ router.get('/', async (req, res) => {
 // 	try {
 // 		console.log('Request body:', req.body);
 // 		console.log('Received status value:', status);
-		
+
 // 		// Convert items and voucher_info to JSON string if they are objects
 // 		const itemsJson = typeof items === 'object' ? JSON.stringify(items) : items;
 // 		const voucherInfoJson = typeof voucher_info === 'object' ? JSON.stringify(voucher_info) : voucher_info;
-		
+
 // 		console.log('Processed itemsJson:', itemsJson);
 // 		console.log('Processed voucherInfoJson:', voucherInfoJson);
 
@@ -51,7 +51,6 @@ router.get('/', async (req, res) => {
 // 		res.status(500).json({ success: false, error: err.message });
 // 	}
 // });
-
 
 // Create a new order
 // Create a new order
@@ -77,6 +76,51 @@ router.post("/", async (req, res) => {
     const parsedItems =
       typeof items === "string" ? JSON.parse(items) : items || [];
 
+    if (!Array.isArray(parsedItems) || parsedItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "No items provided for order.",
+      });
+    }
+
+    // ✅ Check stock availability for each product
+    for (const it of parsedItems) {
+      const pid = it.product_id || it.id;
+      const qty = it.quantity || it.qty || 1;
+
+      const { rows } = await pool.query(
+        `SELECT name, stock FROM product WHERE id = $1`,
+        [pid]
+      );
+
+      if (rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: `❌ Product with ID ${pid} not found.`,
+        });
+      }
+
+      const product = rows[0];
+      if (qty > product.stock) {
+        return res.status(400).json({
+          success: false,
+          error: `❌ Product "${product.name}" has only ${product.stock} in stock.`,
+        });
+      }
+    }
+
+    // ✅ Deduct stock after validation
+    for (const it of parsedItems) {
+      const pid = it.product_id || it.id;
+      const qty = it.quantity || it.qty || 1;
+
+      await pool.query(`UPDATE product SET stock = stock - $1 WHERE id = $2`, [
+        qty,
+        pid,
+      ]);
+    }
+
+    // ✅ Prepare values for insertion
     const itemsJson = JSON.stringify(parsedItems);
     const voucherInfoJson =
       typeof voucher_info === "object"
@@ -105,7 +149,7 @@ router.post("/", async (req, res) => {
 
     let newOrder = result.rows[0];
 
-    // ✅ Enrich items with product details (using only `product` + `images`)
+    // ✅ Enrich items with product details (including image)
     const detailedItems = await Promise.all(
       parsedItems.map(async (it) => {
         const pid = it.product_id || it.id;
@@ -118,6 +162,7 @@ router.post("/", async (req, res) => {
             p.name,
             p.price,
             p.endprice,
+            p.stock,
             img.link AS image
           FROM product p
           LEFT JOIN LATERAL (
@@ -133,7 +178,6 @@ router.post("/", async (req, res) => {
         );
 
         if (rows.length === 0) {
-          // Product not found, fallback
           return { product_id: pid, quantity: qty };
         }
 
@@ -146,6 +190,7 @@ router.post("/", async (req, res) => {
           qty,
           quantity: qty,
           image: product.image || null,
+          remaining_stock: product.stock, // ✅ helpful for dashboard
         };
       })
     );
@@ -159,36 +204,37 @@ router.post("/", async (req, res) => {
   }
 });
 
-
-
 // Update an order
-router.put('/:id', async (req, res) => {
-	const { id } = req.params;
-	const {
-		user_id,
-		items,
-		phone,
-		address,
-		status,
-		active,
-		voucher_info,
-		delivery_cost,
-		voucher_id
-	} = req.body;
+router.put("/:id", async (req, res) => {
+  const { id } = req.params;
+  const {
+    user_id,
+    items,
+    phone,
+    address,
+    status,
+    active,
+    voucher_info,
+    delivery_cost,
+    voucher_id,
+  } = req.body;
 
-	try {
-		console.log('Updating order with ID:', id);
-		console.log('Received status value:', status);
-		
-		// Convert items and voucher_info to JSON string if they are objects
-		const itemsJson = typeof items === 'object' ? JSON.stringify(items) : items;
-		const voucherInfoJson = typeof voucher_info === 'object' ? JSON.stringify(voucher_info) : voucher_info;
-		
-		console.log('Processed itemsJson:', itemsJson);
-		console.log('Processed voucherInfoJson:', voucherInfoJson);
-		
-		const result = await pool.query(
-			`UPDATE "orders" SET 
+  try {
+    console.log("Updating order with ID:", id);
+    console.log("Received status value:", status);
+
+    // Convert items and voucher_info to JSON string if they are objects
+    const itemsJson = typeof items === "object" ? JSON.stringify(items) : items;
+    const voucherInfoJson =
+      typeof voucher_info === "object"
+        ? JSON.stringify(voucher_info)
+        : voucher_info;
+
+    console.log("Processed itemsJson:", itemsJson);
+    console.log("Processed voucherInfoJson:", voucherInfoJson);
+
+    const result = await pool.query(
+      `UPDATE "orders" SET 
 				user_id = $1, 
 				items = $2, 
 				phone = $3, 
@@ -200,41 +246,60 @@ router.put('/:id', async (req, res) => {
 				voucher_id = $9
 			WHERE id = $10 
 			RETURNING *`,
-			[user_id, itemsJson, phone, address, status, active, voucherInfoJson, delivery_cost, voucher_id, id]
-		);
-		
-		if (result.rows.length === 0) {
-			return res.status(404).json({ success: false, message: 'Order not found' });
-		}
-		
-		res.json({ success: true, order: result.rows[0] });
-	} catch (err) {
-		console.log('Database error:', err.message);
-		res.status(500).json({ success: false, error: err.message });
-	}
+      [
+        user_id,
+        itemsJson,
+        phone,
+        address,
+        status,
+        active,
+        voucherInfoJson,
+        delivery_cost,
+        voucher_id,
+        id,
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    res.json({ success: true, order: result.rows[0] });
+  } catch (err) {
+    console.log("Database error:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Delete an order
-router.delete('/:id', async (req, res) => {
-	const { id } = req.params;
-	
-	try {
-		console.log('Deleting order with ID:', id);
-		
-		const result = await pool.query(
-			`DELETE FROM "orders" WHERE id = $1 RETURNING *`,
-			[id]
-		);
-		
-		if (result.rows.length === 0) {
-			return res.status(404).json({ success: false, message: 'Order not found' });
-		}
-		
-		res.json({ success: true, message: 'Order deleted successfully', order: result.rows[0] });
-	} catch (err) {
-		console.log('Database error:', err.message);
-		res.status(500).json({ success: false, error: err.message });
-	}
+router.delete("/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    console.log("Deleting order with ID:", id);
+
+    const result = await pool.query(
+      `DELETE FROM "orders" WHERE id = $1 RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Order deleted successfully",
+      order: result.rows[0],
+    });
+  } catch (err) {
+    console.log("Database error:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 module.exports = router;
