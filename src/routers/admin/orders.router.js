@@ -97,30 +97,74 @@ WHERE o.id = $1;
 });
 
 // Get all orders with user information
+// router.get("/", async (req, res) => {
+//   console.log("Fetching all orders with user information...");
+
+//   try {
+//     const result = await pool.query(
+//       `SELECT
+//         o.*,
+//         u.name as user_name,
+//         u.email as user_email,
+//         u.user_name as username,
+//         u.phone as user_phone
+//        FROM "orders" o
+//        LEFT JOIN "User" u ON o.user_id = u.id
+//        ORDER BY o.created_at DESC`
+//     );
+
+//     console.log(`✅ Found ${result.rows.length} orders`);
+
+//     res.json(result.rows);
+//   } catch (err) {
+//     console.error("Database error:", err.message);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+//getting all orders with user info but with pagination
+
 router.get("/", async (req, res) => {
-  console.log("Fetching all orders with user information...");
+  const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
+  const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 10;
+  const offset = (page - 1) * limit;
 
   try {
+    // ✅ Get total count
+    const countRes = await pool.query('SELECT COUNT(*) FROM "orders"');
+    const total = Number(countRes.rows[0].count);
+
+    // ✅ Get paginated orders with user info
     const result = await pool.query(
-      `SELECT
+      `SELECT 
         o.*,
         u.name as user_name,
         u.email as user_email,
         u.user_name as username,
         u.phone as user_phone
-       FROM "orders" o
+       FROM "orders" o 
        LEFT JOIN "User" u ON o.user_id = u.id
-       ORDER BY o.created_at DESC`
+       ORDER BY o.id DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
     );
 
-    console.log(`✅ Found ${result.rows.length} orders`);
-
-    res.json(result.rows);
+    res.json({
+      orders: result.rows,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
     console.error("Database error:", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
   }
 });
+
 
 // Get single order by ID with user information
 router.get("/:id", async (req, res) => {

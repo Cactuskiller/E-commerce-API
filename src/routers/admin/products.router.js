@@ -2,10 +2,18 @@ const express = require("express");
 const pool = require("../../../db");
 
 const router = express.Router();
-// Get all products with image of priority 1
+
+//geting product with pagination
 router.get("/", async (req, res) => {
+  const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
+  const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 10;
+  const offset = (page - 1) * limit;
+
   try {
-    const result = await pool.query(`
+    const countRes = await pool.query('SELECT COUNT(*) FROM product');
+    const total = Number(countRes.rows[0].count);
+    const result = await pool.query(
+      `
       SELECT
         p.*,
         (
@@ -16,13 +24,24 @@ router.get("/", async (req, res) => {
           LIMIT 1
         ) AS image
       FROM product p
-      ORDER BY p.id ASC;
-    `);
-    res.json(result.rows);
+      ORDER BY p.id ASC
+      LIMIT $1 OFFSET $2;
+      `,
+      [limit, offset]
+    );
+    res.json({
+      products: result.rows,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
+    console.error("Error fetching paginated products:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // Get single product by ID with all it images
 router.get("/:id", async (req, res) => {
