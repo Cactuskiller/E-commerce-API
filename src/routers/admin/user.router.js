@@ -9,11 +9,30 @@ const SALT_ROUNDS = 10;
 
 const router = express.Router();
 
-// Get all users
+// Getting all users with pagination , get the pages then limit 10 records for each
 router.get("/", async (req, res) => {
+ 
+  const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
+  const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 10;
+  const offset = (page - 1) * limit;
+
   try {
-    const result = await pool.query('SELECT * FROM "User"');
-    res.json(result.rows);
+    const countRes = await pool.query('SELECT COUNT(*) FROM "User"');
+    const total = Number(countRes.rows[0].count);
+
+    // Get paginated users
+    const result = await pool.query(
+      `SELECT * FROM "User" ORDER BY id ASC LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    res.json({
+      users: result.rows,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

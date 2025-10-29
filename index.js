@@ -17,7 +17,8 @@ app.use(
     origin: [
       "http://192.168.8.1:5173",
       "http://localhost:5173",
-      "http://192.168.8.1",
+      "http://192.168.8.1:5173",
+      "http://192.168.8.1:5174",
     ],
     credentials: true, // optional, if you're sending cookies or auth headers
   })

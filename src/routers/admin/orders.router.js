@@ -95,6 +95,7 @@ WHERE o.id = $1;
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
 // Get all orders with user information
 router.get("/", async (req, res) => {
   console.log("Fetching all orders with user information...");
