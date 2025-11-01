@@ -91,4 +91,21 @@ router.delete('/:id', async (req, res) => {
 	}
 });
 
+// Add to your ratings router
+router.get('/user/:userId/product/:productId', async (req, res) => {
+  const { userId, productId } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT * FROM rating WHERE user_id = $1 AND product_id = $2 LIMIT 1`,
+      [userId, productId]
+    );
+    if (result.rows.length === 0) {
+      return res.json({ rating: null });
+    }
+    res.json({ rating: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

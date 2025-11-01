@@ -3,6 +3,28 @@ const pool = require("../../../db");
 
 const router = express.Router();
 
+
+router.get("/all", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        p.*,
+        (
+          SELECT link
+          FROM images
+          WHERE images.product_id = p.id AND images.priority = 1
+          ORDER BY id ASC
+          LIMIT 1
+        ) AS image
+      FROM product p
+      ORDER BY p.id ASC
+    `);
+    res.json({ products: result.rows });
+  } catch (err) {
+    console.error("Error fetching all products:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 //geting product with pagination
 router.get("/", async (req, res) => {
   const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
