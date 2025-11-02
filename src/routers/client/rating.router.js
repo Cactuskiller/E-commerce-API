@@ -14,25 +14,69 @@ router.get('/', async (req, res) => {
 });
 
 // Create a new rating
-router.post('/', async (req, res) => {
-	const {
-		user_id,
-		product_id,
-		value
-	} = req.body;
+// router.post('/', async (req, res) => {
+// 	const {
+// 		user_id,
+// 		product_id,
+// 		value
+// 	} = req.body;
 
-	try {
-		const result = await pool.query(
-			`INSERT INTO "rating"
-				(user_id, product_id, value)
-			 VALUES ($1, $2, $3)
-			 RETURNING *`,
-			[user_id, product_id, value]
-		);
-		res.status(201).json({ success: true, rating: result.rows[0] });
-	} catch (err) {
-		res.status(500).json({ success: false, error: err.message });
-	}
+// 	try {
+// 		const result = await pool.query(
+// 			`INSERT INTO "rating"
+// 				(user_id, product_id, value)
+// 			 VALUES ($1, $2, $3)
+// 			 RETURNING *`,
+// 			[user_id, product_id, value]
+// 		);
+// 		res.status(201).json({ success: true, rating: result.rows[0] });
+// 	} catch (err) {
+// 		res.status(500).json({ success: false, error: err.message });
+// 	}
+// });
+
+router.post('/', async (req, res) => {
+  const { user_id, product_id, value } = req.body;
+
+  try {
+    // Check if user already rated this product
+    const existing = await pool.query(
+      `SELECT id FROM rating WHERE user_id = $1 AND product_id = $2`,
+      [user_id, product_id]
+    );
+
+    let result;
+    if (existing.rows.length > 0) {
+      // Update existing rating
+      result = await pool.query(
+        `UPDATE rating SET value = $1 WHERE user_id = $2 AND product_id = $3 RETURNING *`,
+        [value, user_id, product_id]
+      );
+    } else {
+      // Insert new rating
+      result = await pool.query(
+        `INSERT INTO rating (user_id, product_id, value) VALUES ($1, $2, $3) RETURNING *`,
+        [user_id, product_id, value]
+      );
+    }
+
+    // Get average rating and count of unique users
+    const avgRes = await pool.query(
+      `SELECT ROUND(AVG(value)::numeric, 1) AS avg_rating, COUNT(DISTINCT user_id) AS rating_count FROM rating WHERE product_id = $1`,
+      [product_id]
+    );
+    const { avg_rating, rating_count } = avgRes.rows[0];
+
+    res.status(200).json({
+      success: true,
+      rating: result.rows[0],
+      avg_rating,
+      rating_count,
+      message: existing.rows.length > 0 ? 'Rating updated' : 'Rating added',
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Update a rating

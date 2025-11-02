@@ -245,9 +245,6 @@ const router = express.Router();
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// ============================================================================
-// 1️⃣  Upload image directly to Uploadcare
-// ============================================================================
 router.post("/", upload.single("image"), async (req, res) => {
   try {
     if (!req.file) {
@@ -271,7 +268,11 @@ router.post("/", upload.single("image"), async (req, res) => {
 
     console.log("✅ Uploadcare upload successful:", result.uuid);
 
-    const link = `https://2jde1l5c2b.ucarecdn.com/${result.uuid}/-/preview/909x1000/`;
+  // old uploadcare link
+    // const link = `https://2jde1l5c2b.ucarecdn.com/${result.uuid}/-/preview/909x1000/`;
+
+//new upload care link
+const link = `https://48o5fv350s.ucarecd.net/${result.uuid}/-/preview/909x1000/`;
 
     res.json({
       success: true,
@@ -287,9 +288,7 @@ router.post("/", upload.single("image"), async (req, res) => {
   }
 });
 
-// ============================================================================
-// 2️⃣  Get a product and its images by ID
-// ============================================================================
+
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
   try {
@@ -317,9 +316,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ============================================================================
-// 3️⃣  Save an uploaded image to DB with priority
-// ============================================================================
+
 router.post("/save-product-image", upload.single("image"), async (req, res) => {
   try {
     const { product_id } = req.body;
@@ -342,8 +339,13 @@ router.post("/save-product-image", upload.single("image"), async (req, res) => {
         mimeType: req.file.mimetype,
       },
     });
+ // old uploadcare link
+    // const link = `https://2jde1l5c2b.ucarecdn.com/${result.uuid}/-/preview/909x1000/`;
 
-    const link = `https://2jde1l5c2b.ucarecdn.com/${result.uuid}/-/preview/909x1000/`;
+//new upload care link
+const link = `https://48o5fv350s.ucarecd.net/${result.uuid}/-/preview/909x1000/`;
+
+
 
     // Determine priority
     const primaryRes = await pool.query(
@@ -381,9 +383,7 @@ router.post("/save-product-image", upload.single("image"), async (req, res) => {
   }
 });
 
-// ============================================================================
-// 4️⃣  Set primary image
-// ============================================================================
+
 router.put("/set-primary-image/:id", async (req, res) => {
   const { id } = req.params;
   try {
@@ -410,9 +410,7 @@ router.put("/set-primary-image/:id", async (req, res) => {
   }
 });
 
-// ============================================================================
-// 5️⃣  Update secondary image priority
-// ============================================================================
+
 router.put("/set-secondary-priority/:id", async (req, res) => {
   const { id } = req.params;
   const { priority } = req.body;
